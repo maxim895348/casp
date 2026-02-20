@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from transformers import pipeline # For insights if needed, or simple rules
 import datetime
 import calendar
 import re
@@ -90,7 +89,6 @@ def generate_insights(df_perf):
 def ml_predict_forecast(df):
     if df.empty or len(df) < 2:
         return pd.DataFrame()
-    # Simple linear trend for demonstration (can be replaced with Prophet/Sklearn)
     last_date = df['Date'].max()
     future_dates = [last_date + pd.DateOffset(months=i) for i in range(1, 4)]
     
@@ -115,20 +113,17 @@ def ml_predict_forecast(df):
 
 # --- Data Loading & Forensics ---
 @st.cache_data(show_spinner=False)
-def load_and_clean_data(file_path):
+def load_and_clean_data(file_info):
     try:
-        # Load all sheets
-        xl = pd.ExcelFile(file_path)
+        # Check if we got a file-like object from Streamlit Uploader
+        xl = pd.ExcelFile(file_info)
         sheets = xl.sheet_names
         
-        # We will attempt to build an operational master frame
-        # If the structure is too chaotic (like OSETROFF), we extract patterns.
         records = []
         for sheet in sheets:
             df_raw = xl.parse(sheet, header=None)
             for _, row in df_raw.iterrows():
                 row_str = " ".join([str(x) for x in row if pd.notnull(x)])
-                # Extract potential dates, monetary values, weights
                 dates = re.findall(r'\d{2}\.\d{2}\.\d{4}', row_str)
                 money = re.findall(r'(\d{2,6})\s*(?:руб|р|rub|usd|\$)', row_str.lower())
                 kg = re.findall(r'(\d+)\s*(?:кг|g|г)', row_str.lower())
@@ -137,7 +132,6 @@ def load_and_clean_data(file_path):
                 rev = float(money[0]) if money else (np.random.randint(500, 5000) if kg else 0)
                 weight = float(kg[0]) if kg else 0
                 
-                # Convert assumed RUB to USD (approx / 90) just for demo mapping if 'руб' in text
                 if 'руб' in row_str.lower() and rev > 0:
                     rev = rev / 90.0
                     
@@ -147,11 +141,10 @@ def load_and_clean_data(file_path):
                         'Revenue': rev,
                         'Volume_kg': weight,
                         'Channel': sheet,
-                        'Original_Text': row_str[:150] # For drill-down
+                        'Original_Text': row_str[:150]
                     })
         
         if not records:
-            # Fallback Synthetic Data if RegExp fails
             dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
             records = [{
                 'Date': d,
@@ -173,13 +166,18 @@ def main():
     st.title("💠 Hybrid Executive Cockpit")
     st.markdown("Advanced ML-driven BI tool bringing global visibility across Sales, Marketing, and Operations.")
     
-    file_path = 'cводный_отчет_mr_OSETROFF_30_12_15_копия.xlsx'
+    # NEW UPLOADER INSTEAD OF HARDCODED FILE
+    uploaded_file = st.sidebar.file_uploader("📂 Upload Data File", type=["xlsx", "xls", "csv"])
     
+    if not uploaded_file:
+        st.info("☝️ Please upload your Excel or CSV file in the sidebar to generate the dashboard.")
+        return
+        
     with st.spinner("Analyzing Data Forensics & Parsing Entropy..."):
-        df = load_and_clean_data(file_path)
+        df = load_and_clean_data(uploaded_file)
         
     if df.empty:
-        st.warning("No tabular data mapped. Please ensure the file is present in the directory.")
+        st.warning("No data could be mapped from the uploaded file.")
         return
         
     # --- Sidebar Filters ---
@@ -187,13 +185,11 @@ def main():
         st.header("🎛️ Control Panel")
         st.markdown("---")
         
-        # Scenario "What-If"
         st.subheader("🧪 What-If Analysis")
         discount_impact = st.slider("Discount Impact Scenario (%)", -20, 20, 0, step=1, help="Simulate how global discount changes affect MRR.")
         price_multiplier = 1 + (discount_impact / 100.0)
         
         st.markdown("---")
-        # Global Filters
         st.subheader("📅 Global Filters")
         min_date = df['Date'].min().date()
         max_date = df['Date'].max().date()
@@ -202,7 +198,6 @@ def main():
         channels = st.multiselect("Sales Channels", options=df['Channel'].unique(), default=df['Channel'].unique())
         export_btn = st.button("📥 Export Report to PDF")
         
-    # Apply Filters
     if len(date_range) == 2:
         mask = (df['Date'].dt.date >= date_range[0]) & (df['Date'].dt.date <= date_range[1]) & (df['Channel'].isin(channels))
         filtered_df = df.loc[mask].copy()
@@ -267,7 +262,6 @@ def main():
         st.markdown("### Operational Drill-Down & Data Integrity")
         st.markdown("Granular view of all extracted raw transactions. Use the table filters for advanced search.")
         
-        # Display raw interactive table
         st.dataframe(
             filtered_df[['Date', 'Channel', 'Revenue', 'Volume_kg', 'Original_Text']].sort_values(by='Date', ascending=False),
             use_container_width=True,
@@ -279,7 +273,6 @@ def main():
             }
         )
         
-        # CSV Export for ease
         csv = filtered_df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Filtered Data (CSV)", csv, "export_drilldown.csv", "text/csv")
         
@@ -289,3 +282,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
